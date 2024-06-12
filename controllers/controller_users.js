@@ -15,6 +15,9 @@ async function criar(req, res) {
     await Usuario.create(novoUsuario);
     res.status(201).json(novoUsuario);
 }
+/*
+Include a JSON body with email and password on this requisition
+*/
 
 async function entrar(req, res) {
     const usuario = await Usuario.findOne({email: req.body.email});
@@ -29,6 +32,9 @@ async function entrar(req, res) {
         res.status(400).json({ msg: 'Credenciais inválidas' });
     }
 }
+/*
+Include a JSON body with email and password on this requisition
+*/
 
 function renovar(req, res) {
     const token = req.headers['authorization'];
@@ -43,6 +49,10 @@ function renovar(req, res) {
         res.status(400).json({ msg: 'Token não encontrado' });
     }
 }
+/*
+Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+It's not necessary to include a JSON body on this requisition
+*/
 
 async function deletar(req, res) {
     try {
@@ -56,6 +66,11 @@ async function deletar(req, res) {
         res.status(500).json({ msg: 'Erro ao deletar usuário', error: err.message });
     }
 }
+/*
+Include a user's ID on the URL for this requisition
+The URL should look like `http://localhost:3000/users/deletar/<id>`
+It's not necessary to include any new Header or JSON body on this requisition
+*/
 
 async function verSaldo(req, res) {
     try {
@@ -94,6 +109,9 @@ async function depositar(req, res) {
         res.status(500).json({ msg: 'Erro ao realizar depósito', error });
     }
 }
+/*
+Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+*/
 
 async function sacar(req, res) {
     const { valor } = req.body;
