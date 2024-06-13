@@ -10,5 +10,6 @@ router.delete('/deletar/:id', controller.deletar);
 router.get('/saldo/ver', autenticarToken, controller.verSaldo);
 router.post('/saldo/depositar', autenticarToken, controller.depositar);
 router.post('/saldo/sacar', autenticarToken, controller.sacar);
+router.get('/transacoes', autenticarToken, controller.verTransacoes);
 
 module.exports = router;

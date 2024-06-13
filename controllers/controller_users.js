@@ -1,6 +1,7 @@
 const crypto = require('crypto'); // Run 'npm install crypto' on project directory terminal
 const jwt = require('jsonwebtoken'); // Run 'npm install jsonwebtoken' on project directory terminal
 const Usuario = require('../models/model_users'); // Make sure the path goes to the right file
+const Transacao = require('../models/model_transactions'); // Make sure the path goes to the right file
 
 function cifrarSenha(senha, salt) {
     const hash = crypto.createHmac('sha256', salt);
@@ -101,6 +102,7 @@ async function depositar(req, res) {
             { new: true }
         );
         if (usuario) {
+            await Transacao.create({ email: req.user.email, tipo: 'deposito', valor }); // Registering transaction
             res.json({ msg: `Depósito realizado com sucesso. Novo saldo: R$${usuario.saldo}` });
         } else {
             res.status(404).json({ msg: 'Usuário não encontrado' });
@@ -125,6 +127,7 @@ async function sacar(req, res) {
             if (usuario.saldo >= valor) {
                 usuario.saldo -= valor;
                 await usuario.save();
+                await Transacao.create({ email: req.user.email, tipo: 'saque', valor}); // Registering transaction
                 res.json({ msg: `Saque realizado com sucesso. Novo saldo: R$${usuario.saldo}` });
             } else {
                 res.status(400).json({ msg: 'Saldo insuficiente' });
@@ -141,4 +144,22 @@ Include a JSON body with email and value on this requisition
 Also include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
 */
 
-module.exports = { criar, entrar, renovar, deletar, verSaldo, depositar, sacar };
+async function verTransacoes(req, res) {
+    try {
+        const usuario = await Usuario.findOne({ email: req.user.email });
+        if (usuario) {
+            const transacoes = await Transacao.find({ email: req.user.email });
+            res.json(transacoes);
+        } else {
+            res.status(404).json({ msg: 'Usuário não encontrado' });
+        }
+    } catch (error) {
+        res.status(500).json({ msg: 'Erro ao buscar transações', error });
+    }
+}
+/*
+Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+It's not necessary to include a JSON body on this requisition
+*/
+
+module.exports = { criar, entrar, renovar, deletar, verSaldo, depositar, sacar, verTransacoes };
