@@ -50,13 +50,13 @@ function renovar(req, res) {
     }
 }
 /*
-Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+Include a 'Authorization' HTTP Header on this requisition. Its value should be ONLY the token
 It's not necessary to include a JSON body on this requisition
 */
 
 async function deletar(req, res) {
     try {
-        const usuario = await Usuario.findByIdAndDelete(req.params.id); // Finding user by its ID and deleting it
+        const usuario = await Usuario.findByIdAndDelete(req.params.id);
         if (usuario) {
             res.json({ msg: 'Usuário deletado com sucesso' });
         } else {
@@ -74,7 +74,7 @@ It's not necessary to include any new Header or JSON body on this requisition
 
 async function verSaldo(req, res) {
     try {
-        const usuario = await Usuario.findOne({ email: req.user.email });
+        const usuario = await Usuario.findOne({ email: req.user.email }); // Email is already on token
         if (usuario) {
             res.json({ msg: `Saldo: R$${usuario.saldo}` });
         } else {
@@ -110,7 +110,8 @@ async function depositar(req, res) {
     }
 }
 /*
-Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+Include a JSON body with email and value on this requisition
+Also include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
 */
 
 async function sacar(req, res) {
@@ -136,8 +137,8 @@ async function sacar(req, res) {
     }
 }
 /*
-Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
-The JSON body also needs to include an email
+Include a JSON body with email and value on this requisition
+Also include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
 */
 
 module.exports = { criar, entrar, renovar, deletar, verSaldo, depositar, sacar };
