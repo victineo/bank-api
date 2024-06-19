@@ -6,6 +6,7 @@ var router = express.Router();
 router.post('/criar', controller.criar);
 router.post('/login', controller.entrar);
 router.post('/renovar', controller.renovar);
+router.post('/atualizar', autenticarToken, controller.atualizar);
 router.delete('/deletar/:id', controller.deletar);
 router.get('/saldo/ver', autenticarToken, controller.verSaldo);
 router.post('/saldo/depositar', autenticarToken, controller.depositar);

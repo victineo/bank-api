@@ -8,7 +8,8 @@ function autenticarToken(req, res, next) {
 
     jwt.verify(token, process.env.SEGREDO, (err, user) => {
         if (err) return res.status(403).send({ msg: "Token inválido"}); // If the token is invalid, return 'Forbidden'
-        req.user = user;
+
+        req.user = { _id: user._id, email: user.email };
         next(); // Pass to the next middleware or route
     });
 }

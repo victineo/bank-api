@@ -8,15 +8,27 @@ const transactionSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: ['deposito', 'saque']
-        
     },
     valor: {
         type: Number,
-        required: true
+        required: true,
+        min: 0
+    },
+    descricao: {
+        type: String,
+        maxLength: 60
     },
     data: {
         type: Date,
         default: Date.now
+    },
+    de: {
+        type: String,
+        required: function() { return this.tipo == 'pix'; } // This field is only required on 'pix' transactions
+    },
+    para: {
+        type: String,
+        required: function() { return this.tipo == 'pix'; } // This field is only required on 'pix' transactions
     }
 });
 

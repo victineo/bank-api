@@ -9,23 +9,117 @@ function cifrarSenha(senha, salt) {
     return hash.digest('hex');
 }
 
+function formatarCpf(cpf) {
+    return cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function formatarTelefone(telefone) {
+    return telefone.replace(/\D/g, '').replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+}
+
+function validarSenha(senha) {
+    const mensagens = {
+        maiuscula: 'Ao menos 1 letra maiúscula',
+        minuscula: 'Ao menos 1 letra minúscula',
+        numero: 'Ao menos 1 número',
+        especial: 'Ao menos 1 caractere especial',
+        tamanho: 'Ao menos 8 caracteres'
+    };
+
+    const resultados = {
+        maiuscula: /[A-Z]/.test(senha),
+        minuscula: /[a-z]/.test(senha),
+        numero: /\d/.test(senha),
+        especial: /[@$!%*?&_\-#^(){}[\]:;'"<>,.~|]/.test(senha),
+        tamanho: senha.length >= 8
+    };
+
+    let statusMensagens = [];
+
+    for (const [key, mensagem] of Object.entries(mensagens)) {
+        if (resultados[key]) {
+            statusMensagens.push(`[ ✓ ] ${mensagem}`);
+        } else {
+            statusMensagens.push(`[ X ] ${mensagem}`);
+        }
+    }
+
+    return statusMensagens;
+}
+
 async function criar(req, res) {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const senhaCifrada = cifrarSenha(req.body.senha, salt);
-    const novoUsuario = {email: req.body.email, senha: senhaCifrada, salt: salt, saldo: 0};
-    await Usuario.create(novoUsuario);
-    res.status(201).json(novoUsuario);
+    try {
+        const { nome, cpf, telefone, idade, email, senha } = req.body;
+
+        if (!nome) {
+            return res.status(400).json({ msg: 'Nome é obrigatório' });
+        } else if (nome.length < 3) {
+            return res.status(400).json({ msg: 'O nome deve ter ao menos 3 caracteres' })
+        } else if (!cpf) {
+            return res.status(400).json({ msg: 'CPF é obrigatório' });
+        } else if (cpf.toString().length != 11) {
+            return res.status(400).json({ msg: 'CPF inválido' });
+        } else if (!telefone) {
+            return res.status(400).json({ msg: 'Telefone é obrigatório' });
+        } else if (telefone.toString().length != 11) {
+            return res.status(400).json({ msg: 'O telefone deve ter 11 dígitos, incluindo DDD' })
+        } else if (!email) {
+            return res.status(400).json({ msg: 'E-mail é obrigatório' });
+        } else if (!senha) {
+            return res.status(400).json({ msg: 'Senha é obrigatória' });
+        }
+
+        const emailExistente = await Usuario.findOne({ email });
+        if (emailExistente) {
+            return res.status(400).json({ msg: 'Este e-mail já está em uso' });
+        }
+
+        const cpfFormatado = formatarCpf(cpf.toString());
+        const cpfExistente = await Usuario.findOne({ cpf: cpfFormatado });
+        if (cpfExistente) {
+            return res.status(400).json({ msg: 'Este CPF já está em uso' });
+        }
+
+        const validacaoSenha = validarSenha(senha);
+        const senhaValida = validacaoSenha.every(mensagem => mensagem.startsWith('[ ✓ ]'));
+
+        if (!senhaValida) {
+            return res.status(400).json({ msg: 'A senha não atende aos requisitos:', detalhes: validacaoSenha });
+        }
+
+        const telefoneFormatado = formatarTelefone(telefone.toString());
+
+        const salt = crypto.randomBytes(16).toString('hex');
+        const senhaCifrada = cifrarSenha(senha, salt);
+
+        const novoUsuario = {
+            nome,
+            cpf: cpfFormatado,
+            telefone: telefoneFormatado,
+            idade,
+            email,
+            senha: senhaCifrada,
+            salt,
+            saldo: 0
+        };
+
+        await Usuario.create(novoUsuario);
+        res.status(201).json({ msg: 'Usuário criado com sucesso!', usuario: novoUsuario });
+    } catch (error) {
+        res.status(400).json({ msg: `Erro ao criar usuário: ${error.message}` });
+    }
 }
 /*
-Include a JSON body with email and password on this requisition
+Inclua um JSON com AO MENOS 'nome', 'cpf', 'email' e 'senha' que atenda aos requisitos
+Os campos 'telefone' e 'idade' são opcionais
 */
 
 async function entrar(req, res) {
-    const usuario = await Usuario.findOne({email: req.body.email});
+    const usuario = await Usuario.findOne({ email: req.body.email });
     if (usuario) {
         const senhaCifrada = cifrarSenha(req.body.senha, usuario.salt);
         if (senhaCifrada === usuario.senha) {
-            res.json({ token: jwt.sign({ email: usuario.email }, process.env.SEGREDO, { expiresIn: '10m' }) });
+            res.json({ token: jwt.sign({ _id: usuario._id, email: usuario.email }, process.env.SEGREDO, { expiresIn: '10m' }) });
         } else {
             res.status(401).json({ msg: 'Acesso negado' });
         }
@@ -53,6 +147,83 @@ function renovar(req, res) {
 /*
 Include a 'Authorization' HTTP Header on this requisition. Its value should be ONLY the token
 It's not necessary to include a JSON body on this requisition
+*/
+
+async function atualizar(req, res) { // NÃO ESTÁ FUNCIONANDO
+    try {
+        const userId = req.user._id;
+        const usuario = await Usuario.findById(userId);
+
+        if (!usuario) {
+            res.status(404).json({ msg: 'Usuário não encontrado' });
+        }
+
+        const { nome, cpf, telefone, idade, email, senha } = req.body;
+        const updates = {};
+
+        if (nome) {
+            if (nome.length < 3) {
+                return res.status(400).json({ msg: 'O nome deve ter ao menos 3 caracteres'});
+            }
+            updates.nome = nome;
+        }
+
+        if (cpf) {
+            if (cpf.toString().length !== 11) {
+                return res.status(400).json({ msg: 'CPF inválido' });
+            }
+            const cpfFormatado = formatarCpf(cpf.toString());
+            const cpfExistente = await Usuario.findOne({ cpf: cpfFormatado });
+            if (cpfExistente && cpfExistente._id.toString() !== userId.toString()) {
+                return res.status(400).json({ msg: 'Este CPF já está em uso' });
+            }
+            updates.cpf = cpfFormatado;
+        }
+
+        if (telefone) {
+            if (telefone.toString().length !== 11) {
+                return res.status(400).json({ msg: 'O telefone deve ter 11 dígitos, incluindo DDD' });
+            }
+            updates.telefone = formatarTelefone(telefone.toString());
+        }
+
+        if (idade) {
+            if (idade < 0) {
+                return res.status(400).json({ msg: 'Idade inválida' });
+            }
+            updates.idade = idade;
+        }
+
+        if (email) {
+            const emailExistente = await Usuario.findOne({ email });
+            if (emailExistente && emailExistente._id.toString() !== userId.toString()) {
+                return res.status(400).json({ msg: 'Este e-mail já está em uso' });
+            }
+            updates.email = email;
+        }
+
+        if (senha) {
+            const validacaoSenha = validarSenha(senha);
+            const senhaValida = validacaoSenha.every(mensagem => mensagem.startsWith('[✓]'));
+
+            if (!senhaValida) {
+                return res.status(400).json({ msg: 'A senha não atende aos requisitos:', detalhes: validacaoSenha });
+            }
+
+            const salt = crypto.randomBytes(16).toString('hex');
+            updates.senha = cifrarSenha(senha, salt);
+            updates.salt = salt;
+        }
+
+        const usuarioAtualizado = await Usuario.findByIdAndUpdate(userId, updates, { new: true });
+        res.status(200).json({ msg: 'Informações atualizadas com sucesso!', usuario: usuarioAtualizado });
+    } catch (error) {
+        res.status(400).json({ msg: `Erro ao atualizar usuário: ${error.message}` });
+    }
+}
+/*
+Inclua um JSON com um ou mais campos a serem alterados
+Também inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser `Bearer: <token>`
 */
 
 async function deletar(req, res) {
@@ -162,4 +333,44 @@ Include a 'Authorization' HTTP Header on this requisition. Its value should be `
 It's not necessary to include a JSON body on this requisition
 */
 
-module.exports = { criar, entrar, renovar, deletar, verSaldo, depositar, sacar, verTransacoes };
+async function realizarPix(req, res) {
+    const { valor, destinatarioEmail } = req.body;
+
+    if (typeof valor !== 'number' || valor <= 0) {
+        return res.status(400).json({ msg: 'Valor inválido para Pix' });
+    }
+
+    try {
+        const remetente = await Usuario.findOne({ email: req.user.email });
+        const destinatario = await Usuario.findOne({ email: destinatarioEmail });
+
+        if (!destinatario) {
+            return res.status(404).json({ msg: 'Destinatário não encontrado' });
+        }
+
+        if (remetente.saldo < valor) {
+            return res.status(400).json({ msg: 'Saldo insuficiente' });
+        }
+
+        remetente.saldo -= valor;
+        destinatario.saldo += valor;
+
+        await remetente.save();
+        await destinatario.save();
+
+        const transacao = new Transacao({
+            tipo: 'pix',
+            valor: valor,
+            from: remetente.email,
+            to: destinatario.email
+        });
+
+        await transacao.save();
+
+        res.json({ msg: 'Pix realizado com sucesso' });
+    } catch (error) {
+        res.status(500).json({ msg: 'Erro ao realizar Pix', error });
+    }
+}
+
+module.exports = { criar, entrar, renovar, atualizar, deletar, verSaldo, depositar, sacar, verTransacoes, realizarPix };
