@@ -17,6 +17,11 @@ function formatarTelefone(telefone) {
     return telefone.replace(/\D/g, '').replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
 }
 
+function validarEmail(email) {
+    const emailRegex = /^(?!.*\.\.)[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+)*@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$/
+    return emailRegex.test(email)
+}
+
 function validarSenha(senha) {
     const mensagens = {
         maiuscula: 'Ao menos 1 letra maiúscula',
@@ -65,6 +70,8 @@ async function criar(req, res) {
             return res.status(400).json({ msg: 'O telefone deve ter 11 dígitos, incluindo DDD' })
         } else if (!email) {
             return res.status(400).json({ msg: 'E-mail é obrigatório' });
+        } else if (!validarEmail(email)) {
+            return res.status(400).json({ msg: 'E-mail inválido' });
         } else if (!senha) {
             return res.status(400).json({ msg: 'Senha é obrigatória' });
         }
@@ -82,7 +89,6 @@ async function criar(req, res) {
 
         const validacaoSenha = validarSenha(senha);
         const senhaValida = validacaoSenha.every(mensagem => mensagem.startsWith('[ ✓ ]'));
-
         if (!senhaValida) {
             return res.status(400).json({ msg: 'A senha não atende aos requisitos:', detalhes: validacaoSenha });
         }
@@ -149,11 +155,10 @@ Include a 'Authorization' HTTP Header on this requisition. Its value should be O
 It's not necessary to include a JSON body on this requisition
 */
 
-async function atualizar(req, res) { // NÃO ESTÁ FUNCIONANDO
+async function atualizar(req, res) {
     try {
         const userId = req.user._id;
         const usuario = await Usuario.findById(userId);
-
         if (!usuario) {
             res.status(404).json({ msg: 'Usuário não encontrado' });
         }
@@ -195,6 +200,9 @@ async function atualizar(req, res) { // NÃO ESTÁ FUNCIONANDO
         }
 
         if (email) {
+            if (!validarEmail(email)) {
+                return res.status(400).json({ msg: 'E-mail inválido' });
+            }
             const emailExistente = await Usuario.findOne({ email });
             if (emailExistente && emailExistente._id.toString() !== userId.toString()) {
                 return res.status(400).json({ msg: 'Este e-mail já está em uso' });
