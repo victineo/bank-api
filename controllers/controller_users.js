@@ -110,9 +110,9 @@ async function criar(req, res) {
         };
 
         await Usuario.create(novoUsuario);
-        res.status(201).json({ msg: 'Usuário criado com sucesso!', usuario: novoUsuario });
+        return res.status(201).json({ msg: 'Usuário criado com sucesso!', usuario: novoUsuario });
     } catch (error) {
-        res.status(400).json({ msg: `Erro ao criar usuário: ${error.message}` });
+        return res.status(400).json({ msg: `Erro ao criar usuário: ${error.message}` });
     }
 }
 /*
@@ -125,16 +125,16 @@ async function entrar(req, res) {
     if (usuario) {
         const senhaCifrada = cifrarSenha(req.body.senha, usuario.salt);
         if (senhaCifrada === usuario.senha) {
-            res.json({ token: jwt.sign({ _id: usuario._id, email: usuario.email }, process.env.SEGREDO, { expiresIn: '10m' }) });
+            return res.json({ token: jwt.sign({ _id: usuario._id, email: usuario.email }, process.env.SEGREDO, { expiresIn: '10m' }) });
         } else {
-            res.status(401).json({ msg: 'Acesso negado' });
+            return res.status(401).json({ msg: 'Acesso negado' });
         }
     } else {
         res.status(400).json({ msg: 'Credenciais inválidas' });
     }
 }
 /*
-Include a JSON body with email and password on this requisition
+Inclua um JSON com 'email' e 'senha' nessa requisição
 */
 
 function renovar(req, res) {
@@ -142,25 +142,24 @@ function renovar(req, res) {
     if (token) {
         try {
             const payload = jwt.verify(token, process.env.SEGREDO);
-            res.json({token: jwt.sign({ email: payload.email }, process.env.SEGREDO)});
+            return res.json({token: jwt.sign({ email: payload.email }, process.env.SEGREDO)});
         } catch(err) {
-            res.status(401).json({ msg: 'Token inválido' });
+            return res.status(401).json({ msg: 'Token inválido' });
         }
     } else {
         res.status(400).json({ msg: 'Token não encontrado' });
     }
 }
 /*
-Include a 'Authorization' HTTP Header on this requisition. Its value should be ONLY the token
-It's not necessary to include a JSON body on this requisition
+Inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser APENAS `<token>`
+Não é necessário incluir nenhum JSON nessa requisição
 */
 
 async function atualizar(req, res) {
     try {
-        const userId = req.user._id;
-        const usuario = await Usuario.findById(userId);
+        const usuario = await Usuario.findById(req.user._id);
         if (!usuario) {
-            res.status(404).json({ msg: 'Usuário não encontrado' });
+            return res.status(404).json({ msg: 'Usuário não encontrado' });
         }
 
         const { nome, cpf, telefone, idade, email, senha } = req.body;
@@ -179,7 +178,7 @@ async function atualizar(req, res) {
             }
             const cpfFormatado = formatarCpf(cpf.toString());
             const cpfExistente = await Usuario.findOne({ cpf: cpfFormatado });
-            if (cpfExistente && cpfExistente._id.toString() !== userId.toString()) {
+            if (cpfExistente && cpfExistente._id.toString() !== req.user._id.toString()) {
                 return res.status(400).json({ msg: 'Este CPF já está em uso' });
             }
             updates.cpf = cpfFormatado;
@@ -204,7 +203,7 @@ async function atualizar(req, res) {
                 return res.status(400).json({ msg: 'E-mail inválido' });
             }
             const emailExistente = await Usuario.findOne({ email });
-            if (emailExistente && emailExistente._id.toString() !== userId.toString()) {
+            if (emailExistente && emailExistente._id.toString() !== req.user._id.toString()) {
                 return res.status(400).json({ msg: 'Este e-mail já está em uso' });
             }
             updates.email = email;
@@ -223,10 +222,10 @@ async function atualizar(req, res) {
             updates.salt = salt;
         }
 
-        const usuarioAtualizado = await Usuario.findByIdAndUpdate(userId, updates, { new: true });
-        res.status(200).json({ msg: 'Informações atualizadas com sucesso!', usuario: usuarioAtualizado });
+        const usuarioAtualizado = await Usuario.findByIdAndUpdate(req.user._id, updates, { new: true });
+        return res.status(200).json({ msg: 'Informações atualizadas com sucesso!', usuario: usuarioAtualizado });
     } catch (error) {
-        res.status(400).json({ msg: `Erro ao atualizar usuário: ${error.message}` });
+        return res.status(400).json({ msg: `Erro ao atualizar usuário: ${error.message}` });
     }
 }
 /*
@@ -236,37 +235,43 @@ Também inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve
 
 async function deletar(req, res) {
     try {
-        const usuario = await Usuario.findByIdAndDelete(req.params.id);
-        if (usuario) {
-            res.json({ msg: 'Usuário deletado com sucesso' });
-        } else {
-            res.status(404).json({ msg: 'Usuário não encontrado' });
+        const usuario = await Usuario.findById(req.user._id);
+        if (!usuario) {
+            return res.status(404).json({ msg: 'Usuário não encontrado' });
         }
+
+        const usuarioAlvo = await Usuario.findById(req.params.id);
+        if (!usuarioAlvo || !usuarioAlvo._id.equals(usuario._id)) {
+            return res.status(401).json({ msg: 'Ação não autorizada' });
+        }
+
+        await usuarioAlvo.remove();
+        return res.status(200).json({ msg: 'Usuário deletado com sucesso' });
     } catch (err) {
         res.status(500).json({ msg: 'Erro ao deletar usuário', error: err.message });
     }
 }
 /*
-Include a user's ID on the URL for this requisition
-The URL should look like `http://localhost:3000/users/deletar/<id>`
-It's not necessary to include any new Header or JSON body on this requisition
+Inclua o ID de um usuário na URL dessa requisição. A URL deve ser `http://localhost:3000/users/deletar/<id>`
+Também inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser `Bearer: <token>`
+Não é necessário incluir nenhum JSON nessa requisição
 */
 
 async function verSaldo(req, res) {
     try {
-        const usuario = await Usuario.findOne({ email: req.user.email }); // Email is already on token
+        const usuario = await Usuario.findById(req.user._id);
         if (usuario) {
-            res.json({ msg: `Saldo: R$${usuario.saldo}` });
+            return res.json({ msg: `Saldo: R$${usuario.saldo}` });
         } else {
-            res.status(404).json({ msg: 'Usuário não encontrado' });
+            return res.status(404).json({ msg: 'Usuário não encontrado' });
         }
     } catch (error) {
-        res.status(500).json({ msg: 'Erro ao buscar saldo', error });
+        return res.status(500).json({ msg: 'Erro ao buscar saldo', error });
     }
 }
 /*
-Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
-It's not necessary to include a JSON body on this requisition
+Inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser `Bearer: <token>`
+Não é necessário incluir nenhum JSON nessa requisição
 */
 
 async function depositar(req, res) {
@@ -275,24 +280,24 @@ async function depositar(req, res) {
         return res.status(400).json({ msg: 'Valor inválido para depósito' });
     }
     try {
-        const usuario = await Usuario.findOneAndUpdate(
-            { email: req.user.email },
+        const usuario = await Usuario.findByIdAndUpdate(
+            req.user._id,
             { $inc: { saldo: valor } },
             { new: true }
         );
         if (usuario) {
-            await Transacao.create({ email: req.user.email, tipo: 'deposito', valor }); // Registering transaction
-            res.json({ msg: `Depósito realizado com sucesso. Novo saldo: R$${usuario.saldo}` });
+            await Transacao.create({ email: req.user.email, tipo: 'deposito', valor });
+            return res.json({ msg: `Depósito realizado com sucesso. Novo saldo: R$${usuario.saldo}` });
         } else {
-            res.status(404).json({ msg: 'Usuário não encontrado' });
+            return res.status(404).json({ msg: 'Usuário não encontrado' });
         }
     } catch (error) {
-        res.status(500).json({ msg: 'Erro ao realizar depósito', error });
+        return res.status(500).json({ msg: 'Erro ao realizar depósito', error });
     }
 }
 /*
-Include a JSON body with email and value on this requisition
-Also include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+Inclua um JSON com 'email' e 'valor' nessa requisição
+Também inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser `Bearer: <token>`
 */
 
 async function sacar(req, res) {
@@ -301,48 +306,48 @@ async function sacar(req, res) {
         return res.status(400).json({ msg: 'Valor inválido para saque' });
     }
     try {
-        const usuario = await Usuario.findOne({ email: req.body.email });
+        const usuario = await Usuario.findById(req.user._id);
         if (usuario) {
             if (usuario.saldo >= valor) {
                 usuario.saldo -= valor;
                 await usuario.save();
-                await Transacao.create({ email: req.user.email, tipo: 'saque', valor}); // Registering transaction
-                res.json({ msg: `Saque realizado com sucesso. Novo saldo: R$${usuario.saldo}` });
+                await Transacao.create({ email: req.user.email, tipo: 'saque', valor });
+                return res.json({ msg: `Saque realizado com sucesso. Novo saldo: R$${usuario.saldo}` });
             } else {
-                res.status(400).json({ msg: 'Saldo insuficiente' });
+                return res.status(400).json({ msg: 'Saldo insuficiente' });
             }
         } else {
-            res.status(404).json({ msg: 'Usuário não encontrado' });
+            return res.status(404).json({ msg: 'Usuário não encontrado' });
         }
     } catch (error) {
-        res.status(500).json({ msg: 'Erro ao realizar saque', error });
+        return res.status(500).json({ msg: 'Erro ao realizar saque', error });
     }
 }
 /*
-Include a JSON body with email and value on this requisition
-Also include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
+Inclua um JSON com 'email' e 'valor' nessa requisição
+Também inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser `Bearer: <token>`
 */
 
 async function verTransacoes(req, res) {
     try {
-        const usuario = await Usuario.findOne({ email: req.user.email });
+        const usuario = await Usuario.findById(req.user._id);
         if (usuario) {
             const transacoes = await Transacao.find({ email: req.user.email });
-            res.json(transacoes);
+            return res.json(transacoes);
         } else {
-            res.status(404).json({ msg: 'Usuário não encontrado' });
+            return res.status(404).json({ msg: 'Usuário não encontrado' });
         }
     } catch (error) {
-        res.status(500).json({ msg: 'Erro ao buscar transações', error });
+        return res.status(500).json({ msg: 'Erro ao buscar transações', error });
     }
 }
 /*
-Include a 'Authorization' HTTP Header on this requisition. Its value should be `Bearer: <token>`
-It's not necessary to include a JSON body on this requisition
+Inclua um Header HTTP 'Authorization' nessa requisição. Seu valor deve ser `Bearer: <token>`
+Não é necessário incluir nenhum JSON nessa requisição
 */
 
 async function realizarPix(req, res) {
-    const { valor, destinatarioEmail } = req.body;
+    const { valor } = req.body.valor;
 
     if (typeof valor !== 'number' || valor <= 0) {
         return res.status(400).json({ msg: 'Valor inválido para Pix' });
@@ -350,10 +355,12 @@ async function realizarPix(req, res) {
 
     try {
         const remetente = await Usuario.findOne({ email: req.user.email });
-        const destinatario = await Usuario.findOne({ email: destinatarioEmail });
+        const destinatario = await Usuario.findOne({ email: req.body.emailDestinatario });
 
         if (!destinatario) {
             return res.status(404).json({ msg: 'Destinatário não encontrado' });
+        } else if (remetente === destinatario) {
+            return res.status(400).json({ msg: 'Não é possível realizar um Pix para si mesmo' });
         }
 
         if (remetente.saldo < valor) {
@@ -367,18 +374,33 @@ async function realizarPix(req, res) {
         await destinatario.save();
 
         const transacao = new Transacao({
+            email: remetente.email,
             tipo: 'pix',
-            valor: valor,
-            from: remetente.email,
-            to: destinatario.email
+            valor,
+            descricao,
+            data,
+            nomeRemetente: remetente.nome,
+            emailDestinatario: destinatario.email,
+            nomeDestinatario: destinatario.nome
         });
 
         await transacao.save();
 
-        res.json({ msg: 'Pix realizado com sucesso' });
+        return res.json({ msg: 'Pix realizado com sucesso' });
     } catch (error) {
-        res.status(500).json({ msg: 'Erro ao realizar Pix', error });
+        return res.status(500).json({ msg: 'Erro ao realizar Pix', error });
     }
 }
 
-module.exports = { criar, entrar, renovar, atualizar, deletar, verSaldo, depositar, sacar, verTransacoes, realizarPix };
+module.exports = {
+    criar,
+    entrar,
+    renovar,
+    atualizar,
+    deletar,
+    verSaldo,
+    depositar,
+    sacar,
+    verTransacoes,
+    realizarPix
+};

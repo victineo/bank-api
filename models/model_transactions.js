@@ -7,7 +7,7 @@ const transactionSchema = new mongoose.Schema({
     tipo: {
         type: String,
         required: true,
-        enum: ['deposito', 'saque']
+        enum: ['deposito', 'saque', 'pix']
     },
     valor: {
         type: Number,
@@ -22,11 +22,15 @@ const transactionSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
-    de: {
+    nomeRemetente: {
         type: String,
         required: function() { return this.tipo == 'pix'; } // This field is only required on 'pix' transactions
     },
-    para: {
+    emailDestinatario: {
+        type: String,
+        required: function() { return this.tipo == 'pix'; } // This field is only required on 'pix' transactions
+    },
+    nomeDestinatario: {
         type: String,
         required: function() { return this.tipo == 'pix'; } // This field is only required on 'pix' transactions
     }
